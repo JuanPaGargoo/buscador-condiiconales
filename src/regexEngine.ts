@@ -229,42 +229,87 @@ export class ManualRegexEngine {
     return result;
   }
 
-  // Matching en una posición específica - simplificado
+  // Matching en una posición específica - con backtracking mejorado
   private matchAtPosition(text: string, startPos: number): { success: boolean; match: string } {
-    let pos = startPos;
-    let tokenIndex = 0;
-    let matchedStr = '';
+    return this.matchTokensRecursive(this.tokens, text, startPos, 0);
+  }
 
-    while (tokenIndex < this.tokens.length) {
-      const token = this.tokens[tokenIndex];
+  // Método recursivo para matching con backtracking
+  private matchTokensRecursive(tokens: Token[], text: string, pos: number, tokenIndex: number): { success: boolean; match: string } {
+    // Caso base: hemos procesado todos los tokens
+    if (tokenIndex >= tokens.length) {
+      return { success: true, match: text.substring(0, pos) };
+    }
+
+    const token = tokens[tokenIndex];
+    const nextToken = tokenIndex + 1 < tokens.length ? tokens[tokenIndex + 1] : null;
+
+    if (nextToken && this.isQuantifierToken(nextToken)) {
+      // Manejar token con cuantificador usando backtracking
+      return this.handleQuantifierWithBacktrack(token, nextToken, tokens, text, pos, tokenIndex);
+    } else {
+      // Token simple sin cuantificador
+      const matchResult = this.matchToken(token, text, pos);
+      if (!matchResult.success) {
+        return { success: false, match: '' };
+      }
+
+      const newPos = pos + matchResult.consumed.length;
+      const remainingResult = this.matchTokensRecursive(tokens, text, newPos, tokenIndex + 1);
       
-      // Verificar si el siguiente token es un cuantificador
-      const nextToken = tokenIndex + 1 < this.tokens.length ? this.tokens[tokenIndex + 1] : null;
-      
-      if (nextToken && this.isQuantifierToken(nextToken)) {
-        // Manejar token con cuantificador
-        const quantResult = this.handleQuantifierPattern(token, nextToken, text, pos);
-        if (!quantResult.success) {
-          return { success: false, match: '' };
-        }
-        
-        matchedStr += quantResult.consumed;
-        pos += quantResult.consumed.length;
-        tokenIndex += 2; // Saltar token y cuantificador
+      if (remainingResult.success) {
+        // El match total es desde el inicio hasta donde terminamos
+        return { success: true, match: text.substring(0, newPos) };
       } else {
-        // Token simple sin cuantificador
-        const matchResult = this.matchToken(token, text, pos);
-        if (!matchResult.success) {
-          return { success: false, match: '' };
-        }
+        return { success: false, match: '' };
+      }
+    }
+  }
 
-        matchedStr += matchResult.consumed;
-        pos += matchResult.consumed.length;
-        tokenIndex++;
+  // Manejar cuantificadores con backtracking real
+  private handleQuantifierWithBacktrack(baseToken: Token, quantToken: Token, allTokens: Token[], text: string, startPos: number, tokenIndex: number): { success: boolean; match: string } {
+    let targetMin = quantToken.min || 0;
+    let targetMax = quantToken.max || Infinity;
+
+    if (quantToken.type === 'star') {
+      targetMin = 0;
+      targetMax = Infinity;
+    } else if (quantToken.type === 'plus') {
+      targetMin = 1;
+      targetMax = Infinity;
+    } else if (quantToken.type === 'question') {
+      targetMin = 0;
+      targetMax = 1;
+    }
+
+    // Calcular cuántos tokens podemos consumir como máximo
+    const maxPossible = Math.min(targetMax, text.length - startPos);
+    
+    // Intentar desde el máximo hacia el mínimo (backtracking)
+    for (let tryCount = maxPossible; tryCount >= targetMin; tryCount--) {
+      let pos = startPos;
+      let actualCount = 0;
+
+      // Intentar consumir exactamente tryCount tokens
+      while (actualCount < tryCount && pos < text.length) {
+        const tokenResult = this.matchToken(baseToken, text, pos);
+        if (!tokenResult.success) break;
+
+        pos += tokenResult.consumed.length;
+        actualCount++;
+      }
+
+      // Si logramos consumir lo esperado, intentar con el resto del patrón
+      if (actualCount === tryCount) {
+        const remainingResult = this.matchTokensRecursive(allTokens, text, pos, tokenIndex + 2);
+        if (remainingResult.success) {
+          // El match es el texto completo que hemos procesado hasta ahora
+          return { success: true, match: remainingResult.match };
+        }
       }
     }
 
-    return { success: true, match: matchedStr };
+    return { success: false, match: '' };
   }
 
   // Matching de un token individual - solo para números
@@ -311,38 +356,6 @@ export class ManualRegexEngine {
       default:
         return { success: false, consumed: '' };
     }
-  }
-
-  // Manejo simplificado de cuantificadores
-  private handleQuantifierPattern(baseToken: Token, quantToken: Token, text: string, startPos: number): { success: boolean; consumed: string } {
-    let targetMin = quantToken.min || 0;
-    let targetMax = quantToken.max || Infinity;
-
-    if (quantToken.type === 'star') {
-      targetMin = 0;
-      targetMax = Infinity;
-    } else if (quantToken.type === 'plus') {
-      targetMin = 1;
-      targetMax = Infinity;
-    } else if (quantToken.type === 'question') {
-      targetMin = 0;
-      targetMax = 1;
-    }
-
-    let pos = startPos;
-    let consumed = '';
-    let matchCount = 0;
-
-    while (matchCount < targetMax && pos < text.length) {
-      const tokenResult = this.matchToken(baseToken, text, pos);
-      if (!tokenResult.success) break;
-
-      consumed += tokenResult.consumed;
-      pos += tokenResult.consumed.length;
-      matchCount++;
-    }
-
-    return { success: matchCount >= targetMin, consumed };
   }
 
   private isQuantifierToken(token: Token): boolean {
