@@ -9,6 +9,9 @@ interface NumberManagerProps {
 export function NumberManager({ words, matches, onWordsChange }: NumberManagerProps) {
   const [newWord, setNewWord] = useState('')
 
+  // Validar si el input actual es válido
+  const isValidInput = newWord.trim() === '' || /^\d+$/.test(newWord.trim())
+
   // Agregar nueva palabra (solo números)
   const addWord = () => {
     const trimmedWord = newWord.trim()
@@ -18,8 +21,6 @@ export function NumberManager({ words, matches, onWordsChange }: NumberManagerPr
       const updatedWords = [...words, trimmedWord]
       onWordsChange(updatedWords)
       setNewWord('')
-    } else if (trimmedWord && !/^\d+$/.test(trimmedWord)) {
-      alert('⚠️ Solo se permiten números')
     }
   }
 
@@ -31,7 +32,7 @@ export function NumberManager({ words, matches, onWordsChange }: NumberManagerPr
 
   // Manejar Enter en el campo de nueva palabra
   const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'Enter' && isValidInput && newWord.trim()) {
       addWord()
     }
   }
@@ -48,18 +49,32 @@ export function NumberManager({ words, matches, onWordsChange }: NumberManagerPr
       {/* Campo para agregar palabras */}
       <div className="space-y-2">
         
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={newWord}
-            onChange={(e) => setNewWord(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder="Escribe un número y presiona Enter..."
-            className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-colors"
-          />
+        <div className="flex gap-2 items-start">
+          <div className="flex-1">
+            <input
+              type="text"
+              value={newWord}
+              onChange={(e) => setNewWord(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="Escribe un número y presiona Enter..."
+              className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                isValidInput 
+                  ? 'border-gray-300 focus:border-blue-500 focus:ring-blue-200' 
+                  : 'border-red-300 focus:border-red-500 focus:ring-red-200'
+              }`}
+            />
+            {/* Contenedor con altura fija para el mensaje de error */}
+            <div className="h-6 mt-1">
+              {!isValidInput && (
+                <p className="text-sm text-red-600 font-medium">
+                    Solo se pueden escribir números
+                </p>
+              )}
+            </div>
+          </div>
           <button
             onClick={addWord}
-            disabled={!newWord.trim()}
+            disabled={!newWord.trim() || !/^\d+$/.test(newWord.trim())}
             className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
           >
             Agregar
