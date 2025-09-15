@@ -150,18 +150,48 @@ export class ManualRegexEngine {
     };
   }
 
-  // Parser de cuantificadores {n}, {n,}, {n,m}
+  // Parser de cuantificadores {n}, {n,}, {n,m}, {,n}
   private parseQuantifier(startIndex: number): { token: Token; newIndex: number } | null {
     let i = startIndex + 1; // Saltar '{'
     let numberStr = '';
 
-    // Leer primer número
+    // Verificar si empieza directamente con coma {,n}
+    if (i < this.pattern.length && this.pattern[i] === ',') {
+      // Caso {,n} - min = 0, max = n
+      i++; // Saltar la coma
+      let maxStr = '';
+      
+      // Leer el número después de la coma
+      while (i < this.pattern.length && this.isDigit(this.pattern[i])) {
+        maxStr += this.pattern[i];
+        i++;
+      }
+
+      if (maxStr === '') return null; // {,} no es válido
+
+      // Verificar cierre '}'
+      if (i < this.pattern.length && this.pattern[i] === '}') {
+        return {
+          token: {
+            type: 'quantifier',
+            value: this.pattern.substring(startIndex, i + 1),
+            min: 0,
+            max: parseInt(maxStr, 10)
+          },
+          newIndex: i + 1
+        };
+      }
+
+      return null;
+    }
+
+    // Leer primer número (caso normal)
     while (i < this.pattern.length && this.isDigit(this.pattern[i])) {
       numberStr += this.pattern[i];
       i++;
     }
 
-    if (numberStr === '') return null;
+    if (numberStr === '') return null; // {} no es válido
 
     const min = parseInt(numberStr, 10);
     let max = min;
@@ -171,7 +201,7 @@ export class ManualRegexEngine {
       i++;
       let maxStr = '';
       
-      // Leer segundo número (opcional)
+      // Leer segundo número (opcional para {n,})
       while (i < this.pattern.length && this.isDigit(this.pattern[i])) {
         maxStr += this.pattern[i];
         i++;
